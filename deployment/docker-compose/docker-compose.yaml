@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: ${CONTAINER_NAME}
+    restart: always
+    env_file:
+      ../../.env
+    ports:
+      - ${POSTGRES_EXTERNAL_PORT}:${POSTGRES_PORT}
+    volumes:
+      - ./postgres_data:/var/lib/postgres/data
