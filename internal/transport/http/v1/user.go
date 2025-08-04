@@ -13,18 +13,6 @@ func (h *Handler) initUsersRoutes(api *echo.Group) {
 	{
 		users.POST("/sign-up", h.userSignUp)
 		users.POST("/sign-in", h.userSignIn)
-		users.POST("auth/refresh", h.userRefresh)
-
-		authenticated := users.Group("/", h.userIdentity)
-		{
-			ads := users.Group("/")
-			{
-				ads.POST("", h.userCreateAd)
-				ads.GET("", h.userGetAds)
-				ads.GET("/:id", h.UserGetAdById)
-				ads.PUT("/:id", h.userUpdateAdById)
-			}
-		}
 	}
 }
 

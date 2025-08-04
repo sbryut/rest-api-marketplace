@@ -15,10 +15,11 @@ type Users interface {
 }
 
 type Ads interface {
-	Create(ad entity.Ad) entity.Ad
-	GetOne(id string) entity.Ad
-	GetAll(ctx context.Context) []entity.Ad
-	Delete(ad entity.Ad) error
+	Create(ctx context.Context, ad entity.Ad) (int64, error)
+	Update(ctx context.Context, id int64, ad entity.Ad) error
+	GetById(ctx context.Context, id int64) (*entity.Ad, error)
+	GetAll(ctx context.Context, params entity.GetAdsQuery) ([]entity.AdWithAuthor, error)
+	Delete(ctx context.Context, id int64) error
 }
 
 type Repositories struct {
