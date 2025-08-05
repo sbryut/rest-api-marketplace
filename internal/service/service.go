@@ -36,7 +36,9 @@ type UpdateAdInput struct {
 
 type Users interface {
 	SignUp(ctx context.Context, input UserInput) (*entity.User, error)
-	SignIn(ctx context.Context, input UserInput) (string, error)
+	SignIn(ctx context.Context, input UserInput) (Tokens, error)
+	RefreshTokens(ctx context.Context, refreshToken string) (Tokens, error)
+	createSession(ctx context.Context, id int64) (Tokens, error)
 }
 
 type Ads interface {

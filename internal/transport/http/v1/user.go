@@ -13,12 +13,22 @@ func (h *Handler) initUsersRoutes(api *echo.Group) {
 	{
 		users.POST("/sign-up", h.userSignUp)
 		users.POST("/sign-in", h.userSignIn)
+		users.POST("/auth/refresh", h.userRefresh)
 	}
 }
 
 type userInput struct {
 	Login    string `json:"login" validate:"required,min=3,max=64"`
 	Password string `json:"password" validate:"required,min=8,max=64"`
+}
+
+type tokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type refreshInput struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
 func (h *Handler) userSignUp(c echo.Context) error {
@@ -56,7 +66,7 @@ func (h *Handler) userSignIn(c echo.Context) error {
 		})
 	}
 
-	res, err := h.services.Users.SignIn(c.Request().Context(), service.UserInput{
+	tokens, err := h.services.Users.SignIn(c.Request().Context(), service.UserInput{
 		Login:    input.Login,
 		Password: input.Password,
 	})
@@ -72,8 +82,31 @@ func (h *Handler) userSignIn(c echo.Context) error {
 		})
 	}
 
-	c.JSON(http.StatusOK, tokenResponse{
-		AccessToken:  res.AccessToken,
-		RefreshToken: res.RefreshToken,
+	return c.JSON(http.StatusOK, tokenResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+	})
+}
+
+func (h *Handler) userRefresh(c echo.Context) error {
+	var input refreshInput
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid input body",
+		})
+	}
+
+	if err := c.Validate(&input); err != nil {
+		return err
+	}
+
+	tokens, err := h.services.Users.RefreshTokens(c.Request().Context(), input.RefreshToken)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired refresh token")
+	}
+
+	return c.JSON(http.StatusOK, tokenResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 	})
 }

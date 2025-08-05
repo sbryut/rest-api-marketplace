@@ -68,25 +68,20 @@ func (s *UsersService) SignUp(ctx context.Context, input UserInput) (*entity.Use
 	return createdUser, nil
 }
 
-func (s *UsersService) SignIn(ctx context.Context, input UserInput) (string, error) {
+func (s *UsersService) SignIn(ctx context.Context, input UserInput) (Tokens, error) {
 	user, err := s.repo.GetByLogin(ctx, input.Login)
 	if err != nil {
-		return "", fmt.Errorf("UsersService layer error: %w", err)
+		return Tokens{}, entity.ErrInvalidCreds
 	}
 	if user == nil {
-		return "", entity.ErrUserNotFound
+		return Tokens{}, entity.ErrUserNotFound
 	}
 
 	if !s.hasher.Check(input.Password, user.PasswordHash) {
-		return "", entity.ErrInvalidCreds
+		return Tokens{}, entity.ErrInvalidCreds
 	}
 
-	token, err := s.tokenManager.NewJWTToken(user.ID, s.accessTokenTTL)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate token: %w", err)
-	}
-	return token, nil
-	// TODO либо тут сделать возврат (Tokens{}, error), хз
+	return s.createSession(ctx, user.ID)
 }
 
 func (s *UsersService) RefreshTokens(ctx context.Context, refreshToken string) (Tokens, error) {

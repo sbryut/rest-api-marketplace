@@ -1,0 +1,5 @@
+DROP INDEX IF EXISTS idx_ads_price;
+DROP INDEX IF EXISTS idx_ads_created_at;
+
+DROP TABLE IF EXISTS ads;
+DROP TABLE IF EXISTS users;

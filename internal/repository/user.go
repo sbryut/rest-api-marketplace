@@ -52,8 +52,20 @@ func (r *UsersRepo) GetByID(ctx context.Context, id int64) (*entity.User, error)
 	return &user, nil
 }
 
-func (r *UsersRepo) GetByRefreshToken(ctx context.Context, refreshToken string) (entity.User, error) {
+func (r *UsersRepo) GetByRefreshToken(ctx context.Context, refreshToken string) (*entity.User, error) {
+	query := `SELECT id, login, password_hash, created_at
+			  FROM users
+			  WHERE refresh_token = $1 AND refresh_expires_at > NOW()`
 
+	var user entity.User
+	err := r.db.QueryRowContext(ctx, query, refreshToken).Scan(&user.ID, &user.Login, &user.PasswordHash, &user.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, entity.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user by refresh token: %w", err)
+	}
+	return &user, nil
 }
 
 func (r *UsersRepo) SetSession(ctx context.Context, id int64, session entity.Session) error {

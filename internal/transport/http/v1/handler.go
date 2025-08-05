@@ -2,10 +2,12 @@ package v1
 
 import (
 	"errors"
-	"github.com/labstack/echo/v4"
+	"strconv"
+
 	"rest-api-marketplace/internal/service"
 	"rest-api-marketplace/pkg/auth"
-	"strconv"
+
+	"github.com/labstack/echo/v4"
 )
 
 type Handler struct {
