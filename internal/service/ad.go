@@ -2,25 +2,31 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"rest-api-marketplace/internal/entity"
 	"rest-api-marketplace/internal/repository"
 )
 
-type adService struct {
-	repo repository.Ads
+type AdService struct {
+	repo   repository.Ads
+	logger *slog.Logger
 }
 
-func NewAdService(repo repository.Ads) *adService {
-	return &adService{
-		repo: repo,
+func NewAdService(repo repository.Ads, logger *slog.Logger) *AdService {
+	return &AdService{
+		repo:   repo,
+		logger: logger,
 	}
 }
 
-func (s adService) Create(ctx context.Context, input CreateAdInput, userId int64) (*entity.Ad, error) {
+func (s AdService) Create(ctx context.Context, input CreateAdInput, userId int64) (*entity.Ad, error) {
+	const op = "service.AdService.Create"
+
 	if err := validateInput(input.Title, input.Description, input.ImageURL, input.Price); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	ad := entity.Ad{
@@ -33,20 +39,27 @@ func (s adService) Create(ctx context.Context, input CreateAdInput, userId int64
 
 	adId, err := s.repo.Create(ctx, ad)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ad: %w", err)
+		s.logger.Error("failed to create ad", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return s.repo.GetById(ctx, adId)
 }
 
-func (s adService) Update(ctx context.Context, adId, userId int64, input UpdateAdInput) (*entity.Ad, error) {
+func (s AdService) Update(ctx context.Context, adId, userId int64, input UpdateAdInput) (*entity.Ad, error) {
+	const op = "service.AdService.Update"
+
 	originalAd, err := s.repo.GetById(ctx, adId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get original ad: %w", err)
+		if errors.Is(err, entity.ErrAdNotFound) {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to get original ad", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	if originalAd.UserID != userId {
-		return nil, entity.ErrForbidden
+		return nil, fmt.Errorf("%s: %w", op, entity.ErrForbidden)
 	}
 
 	updatedAd := *originalAd
@@ -65,29 +78,42 @@ func (s adService) Update(ctx context.Context, adId, userId int64, input UpdateA
 	}
 
 	if err := validateInput(updatedAd.Title, updatedAd.Description, updatedAd.ImageURL, updatedAd.Price); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	if err := s.repo.Update(ctx, adId, updatedAd); err != nil {
-		return nil, fmt.Errorf("failed to update ad: %w", err)
+		if errors.Is(err, entity.ErrAdNotFound) {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to update ad", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return &updatedAd, nil
 }
 
-func (s adService) GetByID(ctx context.Context, id int64) (*entity.Ad, error) {
+func (s AdService) GetByID(ctx context.Context, id int64) (*entity.Ad, error) {
+	const op = "service.AdService.GetByID"
+
 	ad, err := s.repo.GetById(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ad by id: %w", err)
+		if errors.Is(err, entity.ErrAdNotFound) {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to get user by id", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return ad, nil
 }
 
-func (s adService) GetAll(ctx context.Context, params entity.GetAdsQuery, currentUserId *int64) ([]entity.AdResponse, error) {
+func (s AdService) GetAll(ctx context.Context, params entity.GetAdsQuery, currentUserId *int64) ([]entity.AdResponse, error) {
+	const op = "service.AdService.GetAll"
+
 	adsWithAuthor, err := s.repo.GetAll(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get all ads: %w", err)
+		s.logger.Error("failed to get all ads", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	response := make([]entity.AdResponse, len(adsWithAuthor))
@@ -109,36 +135,46 @@ func (s adService) GetAll(ctx context.Context, params entity.GetAdsQuery, curren
 	return response, nil
 }
 
-func (s adService) Delete(ctx context.Context, adId, userId int64) error {
+func (s AdService) Delete(ctx context.Context, adId, userId int64) error {
+	const op = "service.AdService.Delete"
+
 	ad, err := s.repo.GetById(ctx, adId)
 	if err != nil {
-		return fmt.Errorf("failed to get by id for deleting: %w", err)
+		if errors.Is(err, entity.ErrAdNotFound) {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to get user by id for delete", slog.String("op", op), slog.String("error", err.Error()))
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	if ad.UserID != userId {
-		return entity.ErrForbidden
+		return fmt.Errorf("%s: %w", op, entity.ErrForbidden)
 	}
 	if err := s.repo.Delete(ctx, adId); err != nil {
-		return fmt.Errorf("failed to delete ad: %w", err)
+		if errors.Is(err, entity.ErrAdNotFound) {
+			return fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to delete ad", slog.String("op", op), slog.String("error", err.Error()))
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	return nil
 }
 
 func validateInput(title, description, imageURL string, price float64) error {
-	if len(title) == 0 || len(title) > 100 {
-		return fmt.Errorf("invalid title length")
+	if len(title) < 1 || len(title) > 100 {
+		return fmt.Errorf("title length must be between 1 and 100: %w", entity.ErrInvalidInput)
 	}
 	if len(description) > 1000 {
-		return fmt.Errorf("invalid description length")
+		return fmt.Errorf("description length must be less than 1000: %w", entity.ErrInvalidInput)
 	}
 	if imageURL != "" {
 		if _, err := url.ParseRequestURI(imageURL); err != nil {
-			return fmt.Errorf("invalid umage url format")
+			return fmt.Errorf("invalid umage url format: %w", entity.ErrInvalidInput)
 		}
 	}
 	if price < 0 {
-		return fmt.Errorf("price cannot be negative")
+		return fmt.Errorf("price cannot be negative: %w", entity.ErrInvalidInput)
 	}
 	return nil
 }

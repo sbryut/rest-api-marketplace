@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"rest-api-marketplace/internal/repository"
 	"rest-api-marketplace/pkg/auth"
 	"rest-api-marketplace/pkg/hash"
@@ -13,15 +15,17 @@ import (
 
 type UsersService struct {
 	repo            repository.Users
+	logger          *slog.Logger
 	hasher          hash.PasswordHasher
 	tokenManager    auth.TokenManager
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
 }
 
-func NewUsersService(repo repository.Users, tokenManager auth.TokenManager, tokenTTL, refreshTokenTTL time.Duration) *UsersService {
+func NewUsersService(repo repository.Users, logger *slog.Logger, tokenManager auth.TokenManager, tokenTTL, refreshTokenTTL time.Duration) *UsersService {
 	return &UsersService{
 		repo:            repo,
+		logger:          logger,
 		tokenManager:    tokenManager,
 		accessTokenTTL:  tokenTTL,
 		refreshTokenTTL: refreshTokenTTL,
@@ -29,25 +33,19 @@ func NewUsersService(repo repository.Users, tokenManager auth.TokenManager, toke
 }
 
 func (s *UsersService) SignUp(ctx context.Context, input UserInput) (*entity.User, error) {
-	// TODO: сделать валидацию лучше
+	const op = "service.UsersService.SignUp"
+
 	if len(input.Login) < 3 || len(input.Login) > 30 {
-		return nil, fmt.Errorf("login must be between 3 and 50 characters")
+		return nil, fmt.Errorf("%s: %w: login length", op, entity.ErrInvalidInput)
 	}
 	if len(input.Password) < 6 {
-		return nil, fmt.Errorf("login must be at least 6 characters")
-	}
-
-	existingUser, err := s.repo.GetByLogin(ctx, input.Login)
-	if err != nil {
-		return nil, fmt.Errorf("UsersService layer error: %w", err)
-	}
-	if existingUser != nil {
-		return nil, entity.ErrUserExists
+		return nil, fmt.Errorf("%s: %w: password too short", op, entity.ErrInvalidInput)
 	}
 
 	hashedPass, err := s.hasher.Hash(input.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		s.logger.Error("failed to hash password", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	user := entity.User{
@@ -58,23 +56,31 @@ func (s *UsersService) SignUp(ctx context.Context, input UserInput) (*entity.Use
 
 	userID, err := s.repo.Create(ctx, user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create new user: %w", err)
+		if errors.Is(err, entity.ErrUserExists) {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to create user", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	createdUser, err := s.repo.GetByID(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve created user: %w", err)
+		s.logger.Error("failed to retrieve created user", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	return createdUser, nil
 }
 
 func (s *UsersService) SignIn(ctx context.Context, input UserInput) (Tokens, error) {
+	const op = "service.UsersService.SignIn"
+
 	user, err := s.repo.GetByLogin(ctx, input.Login)
 	if err != nil {
-		return Tokens{}, entity.ErrInvalidCreds
-	}
-	if user == nil {
-		return Tokens{}, entity.ErrUserNotFound
+		if errors.Is(err, entity.ErrUserNotFound) {
+			return Tokens{}, fmt.Errorf("%s: %w", op, entity.ErrInvalidCreds)
+		}
+		s.logger.Error("failed to get user by login", slog.String("op", op), slog.String("error", err.Error()))
+		return Tokens{}, fmt.Errorf("%s: %w", op, err)
 	}
 
 	if !s.hasher.Check(input.Password, user.PasswordHash) {
@@ -85,14 +91,25 @@ func (s *UsersService) SignIn(ctx context.Context, input UserInput) (Tokens, err
 }
 
 func (s *UsersService) RefreshTokens(ctx context.Context, refreshToken string) (Tokens, error) {
+	const op = "service.UsersService.RefreshTokens"
+
+	if refreshToken == "" {
+		return Tokens{}, fmt.Errorf("%s: %w: empty refresh token", op, entity.ErrInvalidInput)
+	}
+
 	user, err := s.repo.GetByRefreshToken(ctx, refreshToken)
 	if err != nil {
-		return Tokens{}, err
+		if errors.Is(err, entity.ErrUserNotFound) {
+			return Tokens{}, fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to get user by refresh token", slog.String("op", op), slog.String("error", err.Error()))
+		return Tokens{}, fmt.Errorf("%s: %w", op, err)
 	}
 	return s.createSession(ctx, user.ID)
 }
 
 func (s *UsersService) createSession(ctx context.Context, id int64) (Tokens, error) {
+	const op = "service.UsersService.createSession"
 	var (
 		res Tokens
 		err error
@@ -100,12 +117,14 @@ func (s *UsersService) createSession(ctx context.Context, id int64) (Tokens, err
 
 	res.AccessToken, err = s.tokenManager.NewJWTToken(id, s.accessTokenTTL)
 	if err != nil {
-		return res, err
+		s.logger.Error("failed to create access token", slog.String("op", op), slog.String("error", err.Error()))
+		return res, fmt.Errorf("%s: %w", op, err)
 	}
 
 	res.RefreshToken, err = s.tokenManager.NewRefreshToken()
 	if err != nil {
-		return res, err
+		s.logger.Error("failed to create refresh token", slog.String("op", op), slog.String("error", err.Error()))
+		return res, fmt.Errorf("%s: %w", op, err)
 	}
 
 	session := entity.Session{
@@ -114,6 +133,10 @@ func (s *UsersService) createSession(ctx context.Context, id int64) (Tokens, err
 	}
 
 	err = s.repo.SetSession(ctx, id, session)
+	if err != nil {
+		s.logger.Error("failed to set session", slog.String("op", op), slog.String("error", err.Error()))
+		return Tokens{}, fmt.Errorf("%s: %w", op, err)
+	}
 
 	return res, nil
 }

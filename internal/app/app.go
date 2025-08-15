@@ -3,15 +3,13 @@ package app
 import (
 	"context"
 	"errors"
-	"github.com/go-playground/validator/v10"
-	"github.com/joho/godotenv"
-	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"time"
+
 	"rest-api-marketplace/internal/config"
 	"rest-api-marketplace/internal/repository"
 	"rest-api-marketplace/internal/service"
@@ -19,7 +17,11 @@ import (
 	"rest-api-marketplace/pkg/auth"
 	postgres "rest-api-marketplace/pkg/client/postgresdb"
 	"rest-api-marketplace/pkg/hash"
-	"time"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v4"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -77,6 +79,7 @@ func Run() {
 	repos := repository.NewRepositories(db)
 
 	services := service.NewServices(service.Deps{
+		Logger:          log,
 		Repos:           repos,
 		Hasher:          passwordHasher,
 		TokenManager:    tokenManager,
@@ -88,6 +91,7 @@ func Run() {
 
 	e := echo.New()
 	e.Validator = &CustomValidator{validator: v}
+	e.HTTPErrorHandler = customErrorHandler
 
 	handler.Init(e.Group("/api"))
 
@@ -122,4 +126,22 @@ func setupLogger(env string) *slog.Logger {
 	}
 	// TODO: сделать функцию, которая будет игнорировать сообщения, отпр-ые в логгер для тестов
 	return log
+}
+
+func customErrorHandler(err error, c echo.Context) {
+	code := http.StatusInternalServerError
+	message := "internal server error"
+
+	if he, ok := err.(*echo.HTTPError); ok {
+		code = he.Code
+		if msg, ok := he.Message.(string); ok {
+			message = msg
+		}
+	}
+
+	if !c.Response().Committed {
+		c.JSON(code, map[string]string{
+			"error": message,
+		})
+	}
 }

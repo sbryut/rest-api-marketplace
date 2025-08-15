@@ -17,38 +17,43 @@ func NewAdsRepo(db *sql.DB) *AdsRepo {
 }
 
 func (r AdsRepo) Create(ctx context.Context, ad entity.Ad) (int64, error) {
+	const op = "repository.AdsRepo.Create"
+
 	query := `INSERT INTO ads (user_id, title, description, image_url, price) VALUES ($1, $2, $3, $4, $5) RETURNING id`
 
 	var id int64
-
 	err := r.db.QueryRowContext(ctx, query, ad.UserID, ad.Title, ad.Description, ad.ImageURL, ad.Price).Scan(&id)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create new ad: %w", err)
+		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return id, nil
 }
 
 func (r AdsRepo) Update(ctx context.Context, id int64, ad entity.Ad) error {
+	const op = "repository.AdsRepo.Update"
+
 	query := `UPDATE ads SET title = $1, description = $2, image_url = $3, price = $4 WHERE id = $5`
 
 	res, err := r.db.ExecContext(ctx, query, ad.Title, ad.Description, ad.ImageURL, ad.Price, id)
 	if err != nil {
-		return fmt.Errorf("failed to update ad: %w", err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+		return fmt.Errorf("%s: check rows affected: %w", op, err)
 	}
 	if rowsAffected == 0 {
-		return entity.ErrAdNotFound
+		return fmt.Errorf("%s: %w", op, entity.ErrAdNotFound)
 	}
 
 	return nil
 }
 
 func (r AdsRepo) GetById(ctx context.Context, id int64) (*entity.Ad, error) {
+	const op = "repository.AdsRepo.GetById"
+
 	query := `SELECT id, user_id, title, description, image_url, price, created_at FROM ads WHERE id = $1`
 
 	var ad entity.Ad
@@ -56,15 +61,17 @@ func (r AdsRepo) GetById(ctx context.Context, id int64) (*entity.Ad, error) {
 	err := r.db.QueryRowContext(ctx, query, id).Scan(&ad.ID, &ad.UserID, &ad.Title, &ad.Description, &ad.ImageURL, &ad.Price, &ad.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, entity.ErrAdNotFound
+			return nil, fmt.Errorf("%s: %w", op, entity.ErrAdNotFound)
 		}
-		return nil, fmt.Errorf("failed to get ad by id: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return &ad, nil
 }
 
 func (r AdsRepo) GetAll(ctx context.Context, params entity.GetAdsQuery) ([]entity.AdWithAuthor, error) {
+	const op = "repository.AdsRepo.GetAll"
+
 	baseQuery := `
     SELECT a.id, a.user_id, a.title, a.description, a.image_url, a.price, a.created_at, u.login
     FROM ads a
@@ -123,7 +130,7 @@ func (r AdsRepo) GetAll(ctx context.Context, params entity.GetAdsQuery) ([]entit
 
 	rows, err := r.db.QueryContext(ctx, baseQuery, args)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get all ads: %w", err)
+		return nil, fmt.Errorf("%s: query execution: %w", op, err)
 	}
 	defer rows.Close()
 
@@ -140,7 +147,7 @@ func (r AdsRepo) GetAll(ctx context.Context, params entity.GetAdsQuery) ([]entit
 			&ad.CreatedAt,
 			&ad.AuthorLogin,
 		); err != nil {
-			return nil, fmt.Errorf("failed to get all ads: %w", err)
+			return nil, fmt.Errorf("%s: row scan: %w", op, err)
 		}
 		ads = append(ads, ad)
 	}
@@ -149,19 +156,22 @@ func (r AdsRepo) GetAll(ctx context.Context, params entity.GetAdsQuery) ([]entit
 }
 
 func (r AdsRepo) Delete(ctx context.Context, id int64) error {
+	const op = "repository.AdsRepo.Delete"
+
 	query := `DELETE FROM ads WHERE id = $1`
+
 	res, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete ad: %w", err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+		return fmt.Errorf("%S: check rows affected: %w", op, err)
 	}
 
 	if rowsAffected == 0 {
-		return entity.ErrAdNotFound
+		return fmt.Errorf("%s: %w", op, entity.ErrAdNotFound)
 	}
 
 	return nil

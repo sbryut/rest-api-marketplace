@@ -43,17 +43,14 @@ type updateAdInput struct {
 func (h *Handler) createAd(c echo.Context) error {
 	userId, ok := c.Get(middleware.CtxUserID).(int64)
 	if !ok {
-		return echo.NewHTTPError(http.StatusUnauthorized, map[string]string{
-			"error": "invalid token, user not found",
-		})
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user context")
 	}
 
 	var input createAdInput
 	if err := c.Bind(&input); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
-			"error": "invalid request body",
-		})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
+
 	if err := c.Validate(&input); err != nil {
 		return err
 	}
@@ -66,9 +63,10 @@ func (h *Handler) createAd(c echo.Context) error {
 	}, userId)
 
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
-			"error": "failed to create ad",
-		})
+		if errors.Is(err, entity.ErrInvalidInput) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create ad")
 	}
 
 	return c.JSON(http.StatusCreated, ad)
@@ -77,23 +75,17 @@ func (h *Handler) createAd(c echo.Context) error {
 func (h *Handler) updateAd(c echo.Context) error {
 	userId, ok := c.Get(middleware.CtxUserID).(int64)
 	if !ok {
-		return echo.NewHTTPError(http.StatusUnauthorized, map[string]string{
-			"error": "invalid user context",
-		})
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user context")
 	}
 
 	adId, err := h.parseIdFromPath(c, "id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
-			"error": "invalid id format",
-		})
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	var input createAdInput
 	if err := c.Bind(&input); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
-			"error": "invalid request body",
-		})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
 	updatedAd, err := h.services.Ads.Update(c.Request().Context(), adId, userId, service.UpdateAdInput{
@@ -103,22 +95,17 @@ func (h *Handler) updateAd(c echo.Context) error {
 		Price:       &input.Price,
 	})
 	if err != nil {
-		if errors.Is(err, entity.ErrAdNotFound) {
-			return echo.NewHTTPError(http.StatusNotFound, map[string]string{
-				"error": "ad not found",
-			})
+		switch {
+		case errors.Is(err, entity.ErrAdNotFound):
+			return echo.NewHTTPError(http.StatusNotFound, "ad not found")
+		case errors.Is(err, entity.ErrForbidden):
+			return echo.NewHTTPError(http.StatusForbidden, "you don't have permission to update this ad")
+		case errors.Is(err, entity.ErrInvalidInput):
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		default:
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to update the ad")
 		}
-		if errors.Is(err, entity.ErrForbidden) {
-			return echo.NewHTTPError(http.StatusForbidden, map[string]string{
-				"error": "you don't have permission to update this ad",
-			})
-		}
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
-			"error": "error",
-			// TODO изменить структуру ответа с ошибкой
-		})
 	}
-
 	return c.JSON(http.StatusOK, updatedAd)
 }
 
@@ -152,9 +139,7 @@ func (h *Handler) listAds(c echo.Context) error {
 
 	ads, err := h.services.Ads.GetAll(c.Request().Context(), params, currentUserId)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
-			"error": "failed to get ads",
-		})
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get ads")
 	}
 
 	return c.JSON(http.StatusOK, ads)
@@ -163,33 +148,24 @@ func (h *Handler) listAds(c echo.Context) error {
 func (h *Handler) deleteAd(c echo.Context) error {
 	userId, ok := c.Get(middleware.CtxUserID).(int64)
 	if !ok {
-		return echo.NewHTTPError(http.StatusUnauthorized, map[string]string{
-			"error": "invalid user context",
-		})
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user context")
 	}
 
 	adId, err := h.parseIdFromPath(c, "id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
-			"error": "invalid id format",
-		})
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	err = h.services.Ads.Delete(c.Request().Context(), adId, userId)
 	if err != nil {
-		if errors.Is(err, entity.ErrAdNotFound) {
-			return echo.NewHTTPError(http.StatusNotFound, map[string]string{
-				"error": "ad not found",
-			})
+		switch {
+		case errors.Is(err, entity.ErrAdNotFound):
+			return echo.NewHTTPError(http.StatusNotFound, "ad not found")
+		case errors.Is(err, entity.ErrForbidden):
+			return echo.NewHTTPError(http.StatusForbidden, "you don't have permission to delete this ad")
+		default:
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete this ad")
 		}
-		if errors.Is(err, entity.ErrForbidden) {
-			return echo.NewHTTPError(http.StatusForbidden, map[string]string{
-				"error": "you don't have permission to delete this ad",
-			})
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
-			"error": "failed to delete this ad",
-		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

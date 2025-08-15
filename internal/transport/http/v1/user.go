@@ -2,10 +2,12 @@ package v1
 
 import (
 	"errors"
-	"github.com/labstack/echo/v4"
 	"net/http"
+
 	"rest-api-marketplace/internal/entity"
 	"rest-api-marketplace/internal/service"
+
+	"github.com/labstack/echo/v4"
 )
 
 func (h *Handler) initUsersRoutes(api *echo.Group) {
@@ -34,9 +36,11 @@ type refreshInput struct {
 func (h *Handler) userSignUp(c echo.Context) error {
 	var input userInput
 	if err := c.Bind(&input); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid request body",
-		})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	if err := c.Validate(input); err != nil {
+		return err
 	}
 
 	user, err := h.services.Users.SignUp(c.Request().Context(), service.UserInput{
@@ -45,14 +49,14 @@ func (h *Handler) userSignUp(c echo.Context) error {
 	})
 
 	if err != nil {
-		if errors.Is(err, entity.ErrUserExists) {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "user already exists",
-			})
+		switch {
+		case errors.Is(err, entity.ErrUserExists):
+			return echo.NewHTTPError(http.StatusConflict, "user with this login already exists")
+		case errors.Is(err, entity.ErrInvalidInput):
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		default:
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to create user")
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "failed to create user",
-		})
 	}
 
 	return c.JSON(http.StatusCreated, user)
@@ -61,9 +65,11 @@ func (h *Handler) userSignUp(c echo.Context) error {
 func (h *Handler) userSignIn(c echo.Context) error {
 	var input userInput
 	if err := c.Bind(&input); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid request body",
-		})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	if err := c.Validate(input); err != nil {
+		return err
 	}
 
 	tokens, err := h.services.Users.SignIn(c.Request().Context(), service.UserInput{
@@ -72,14 +78,12 @@ func (h *Handler) userSignIn(c echo.Context) error {
 	})
 
 	if err != nil {
-		if errors.Is(err, entity.ErrUserNotFound) {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "user not found",
-			})
+		switch {
+		case errors.Is(err, entity.ErrInvalidCreds):
+			return echo.NewHTTPError(http.StatusUnauthorized, "invalid login or password")
+		default:
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to sign in")
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "failed to create user",
-		})
 	}
 
 	return c.JSON(http.StatusOK, tokenResponse{
@@ -91,9 +95,7 @@ func (h *Handler) userSignIn(c echo.Context) error {
 func (h *Handler) userRefresh(c echo.Context) error {
 	var input refreshInput
 	if err := c.Bind(&input); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid input body",
-		})
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
 	if err := c.Validate(&input); err != nil {
@@ -102,7 +104,12 @@ func (h *Handler) userRefresh(c echo.Context) error {
 
 	tokens, err := h.services.Users.RefreshTokens(c.Request().Context(), input.RefreshToken)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired refresh token")
+		switch {
+		case errors.Is(err, entity.ErrUserNotFound) || errors.Is(err, entity.ErrInvalidInput):
+			return echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired refresh token")
+		default:
+			return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+		}
 	}
 
 	return c.JSON(http.StatusOK, tokenResponse{
