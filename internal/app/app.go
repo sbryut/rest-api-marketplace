@@ -3,7 +3,8 @@ package app
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+	"github.com/golang-migrate/migrate/v4"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,6 +20,8 @@ import (
 	"rest-api-marketplace/pkg/hash"
 
 	"github.com/go-playground/validator/v10"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
@@ -43,27 +46,30 @@ func (cv *CustomValidator) Validate(i interface{}) error {
 
 func Run() {
 	if err := godotenv.Load(); err != nil {
-		log.Fatalf("error loading .env file: %v", err)
-		return
+		slog.Error("error loading .env file", slog.Any("error", err))
+		os.Exit(1)
 	}
 
-	log.Println("config initializing")
+	slog.Info("config initializing")
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("cannot load config %v", err)
+		slog.Error("cannot load config", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	log := setupLogger(cfg.Env)
 	log = log.With(slog.String("env", cfg.Env))
 
-	log.Info("Initializing server", slog.String("address", cfg.Server.Host+":"+cfg.Server.Port))
+	log.Info("initializing server", slog.String("address", cfg.Server.Host+":"+cfg.Server.Port))
 	log.Debug("logger debug mode enabled")
 
-	log.Info("Initializing dependencies")
+	log.Info("initializing dependencies")
 	initCtx, cancelInit := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancelInit()
 
-	db, err := postgres.NewClient(initCtx, cfg.DB)
+	runMigrations(cfg.DB, log)
+
+	db, err := postgres.NewClient(initCtx, cfg.DB, log)
 	if err != nil {
 		log.Error("failed to connect database", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -72,6 +78,7 @@ func Run() {
 	tokenManager, err := auth.NewManager(cfg.Auth.SigningKey)
 	if err != nil {
 		log.Error("failed to init token manager", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	passwordHasher := hash.NewBcryptHasher(bcrypt.DefaultCost)
 	v := validator.New()
@@ -91,7 +98,7 @@ func Run() {
 
 	e := echo.New()
 	e.Validator = &CustomValidator{validator: v}
-	e.HTTPErrorHandler = customErrorHandler
+	e.HTTPErrorHandler = customErrorHandler(log)
 
 	handler.Init(e.Group("/api"))
 
@@ -128,20 +135,49 @@ func setupLogger(env string) *slog.Logger {
 	return log
 }
 
-func customErrorHandler(err error, c echo.Context) {
-	code := http.StatusInternalServerError
-	message := "internal server error"
+func customErrorHandler(log *slog.Logger) echo.HTTPErrorHandler {
+	return func(err error, c echo.Context) {
+		code := http.StatusInternalServerError
+		message := "internal server error"
 
-	if he, ok := err.(*echo.HTTPError); ok {
-		code = he.Code
-		if msg, ok := he.Message.(string); ok {
-			message = msg
+		if he, ok := err.(*echo.HTTPError); ok {
+			code = he.Code
+			if msg, ok := he.Message.(string); ok {
+				message = msg
+			}
+		}
+
+		if code >= 500 {
+			log.Error("internal server error", slog.String("error", err.Error()), slog.String("request_uri", c.Request().RequestURI))
+		}
+
+		if !c.Response().Committed {
+			c.JSON(code, map[string]string{
+				"error": message,
+			})
 		}
 	}
+}
 
-	if !c.Response().Committed {
-		c.JSON(code, map[string]string{
-			"error": message,
-		})
+func runMigrations(cfg config.PostgresConfig, log *slog.Logger) {
+	migrationDNS := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		cfg.Username,
+		cfg.Password,
+		cfg.Host,
+		cfg.Port,
+		cfg.DBName,
+	)
+
+	m, err := migrate.New("file://migrations", migrationDNS)
+	if err != nil {
+		log.Error("failed to create migrate instance", slog.Any("error", err))
+		os.Exit(1)
 	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Error("failed to apply migrations", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	log.Info("migrations successfully applied")
 }

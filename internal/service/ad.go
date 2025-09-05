@@ -59,7 +59,7 @@ func (s AdService) Update(ctx context.Context, adId, userId int64, input UpdateA
 	}
 
 	if originalAd.UserID != userId {
-		return nil, fmt.Errorf("%s: %w", op, entity.ErrForbidden)
+		return nil, entity.ErrForbidden
 	}
 
 	updatedAd := *originalAd

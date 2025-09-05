@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 
 	"rest-api-marketplace/internal/config"
 
 	_ "github.com/lib/pq"
 )
 
-func NewClient(ctx context.Context, cfg config.PostgresConfig) (*sql.DB, error) {
+func NewClient(ctx context.Context, cfg config.PostgresConfig, log *slog.Logger) (*sql.DB, error) {
 
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host,
@@ -31,7 +32,7 @@ func NewClient(ctx context.Context, cfg config.PostgresConfig) (*sql.DB, error) 
 		return nil, fmt.Errorf("failed to ping database: %v", err)
 	}
 
-	log.Println("Successfully connected to the database")
+	log.Info("Successfully connected to the database")
 	return db, nil
 }
 

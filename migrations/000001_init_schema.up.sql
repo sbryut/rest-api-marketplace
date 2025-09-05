@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
     id                  BIGSERIAL PRIMARY KEY,
     login               VARCHAR(255) NOT NULL UNIQUE,
     password_hash       VARCHAR(255) NOT NULL,
-    created_at          TIMESTAMP WITH ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     refresh_token       VARCHAR(255),
     refresh_expires_at  TIMESTAMP WITH TIME ZONE
 );
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS ads (
     description     TEXT,
     image_url       VARCHAR(255),
     price           DECIMAL(10,2) NOT NULL,
-    created_at      TIMESTAMP WITH ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 

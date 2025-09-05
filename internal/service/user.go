@@ -22,10 +22,11 @@ type UsersService struct {
 	refreshTokenTTL time.Duration
 }
 
-func NewUsersService(repo repository.Users, logger *slog.Logger, tokenManager auth.TokenManager, tokenTTL, refreshTokenTTL time.Duration) *UsersService {
+func NewUsersService(repo repository.Users, logger *slog.Logger, hasher hash.PasswordHasher, tokenManager auth.TokenManager, tokenTTL, refreshTokenTTL time.Duration) *UsersService {
 	return &UsersService{
 		repo:            repo,
 		logger:          logger,
+		hasher:          hasher,
 		tokenManager:    tokenManager,
 		accessTokenTTL:  tokenTTL,
 		refreshTokenTTL: refreshTokenTTL,
