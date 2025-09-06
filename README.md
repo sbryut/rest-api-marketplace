@@ -38,6 +38,7 @@ POSTGRES_DB=<your_db_name>
 
 ENV_LOG=local
 SIGNING_KEY=<random string>
-TOKEN_TTL=3h
+ACCESS_TOKEN_TTL=3h
+REFRESH_TOKEN_TTL=720h
 ```
 
