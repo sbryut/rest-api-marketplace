@@ -25,6 +25,7 @@ The project is a REST API service for a simple online marketplace, developed in 
 - Validation: go-playground/validator
 - Logging: log/slog
 - Linters: golangci-lint
+- API Documentation: Swagger (swaggo/echo-swagger)
 
 Create .env file in root directory and add following values:
 ```env
