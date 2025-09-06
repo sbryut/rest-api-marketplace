@@ -42,6 +42,18 @@ type updateAdInput struct {
 	Price       *float64 `json:"price,omitempty" validate:"gte=0"`
 }
 
+// @Summary Create Ad
+// @Description Create a new advertisement
+// @Tags ads
+// @Accept json
+// @Produce json
+// @Param Authorization header string true "Bearer <token>"
+// @Param ad body createAdInput true "Ad creation details"
+// @Success 201 {object} entity.Ad
+// @Failure 400 {object} error "Invalid request body or input"
+// @Failure 409 {object} error "Unauthorized"
+// @Failure 500 {object} error "Failed to create ad"
+// @Router /api/v1/ads [post]
 // createAd handles POST /ads to create a new advertisement
 func (h *Handler) createAd(c echo.Context) error {
 	userID, ok := c.Get(middleware.CtxUserID).(int64)
@@ -75,6 +87,21 @@ func (h *Handler) createAd(c echo.Context) error {
 	return c.JSON(http.StatusCreated, ad)
 }
 
+// @Summary Update Ad
+// @Description Update an existing advertisement
+// @Tags ads
+// @Accept json
+// @Produce json
+// @Param Authorization header string true "Bearer <token>"
+// @Param id path int64 true "Ad ID"
+// @Param ad body updateAdInput true "Ad update details"
+// @Success 200 {object} entity.Ad
+// @Failure 400 {object} error "Invalid request body or input"
+// @Failure 401 {object} error "Unauthorized"
+// @Failure 403 {object} error "Forbidden"
+// @Failure 404 {object} error "Ad not found"
+// @Failure 500 {object} error "Failed to update ad"
+// @Router /api/v1/ads/{id} [put]
 // updateAd handles PUT /ads/:id to update an existing advertisement
 func (h *Handler) updateAd(c echo.Context) error {
 	userID, ok := c.Get(middleware.CtxUserID).(int64)
@@ -113,6 +140,20 @@ func (h *Handler) updateAd(c echo.Context) error {
 	return c.JSON(http.StatusOK, updatedAd)
 }
 
+// @Summary List Ads
+// @Description Retrieve a paginated list of advertisements
+// @Tags ads
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Number of items per page" default(10)
+// @Param min_price query float64 false "Minimum price"
+// @Param max_price query float64 false "Maximum price"
+// @Param sort_by query string false "Sort by field (e.g., price, created_at)"
+// @Param sort_dir query string false "Sort direction (asc or desc)"
+// @Success 200 {array} entity.Ad
+// @Failure 400 {object} error "Incorrect price parameter"
+// @Failure 500 {object} error "Failed to get ads"
+// @Router /api/v1/ads [get]
 // listAds handles GET /ads to retrieve a paginated list of advertisements
 func (h *Handler) listAds(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
@@ -169,6 +210,16 @@ func (h *Handler) listAds(c echo.Context) error {
 	return c.JSON(http.StatusOK, ads)
 }
 
+// @Summary Get Ad by ID
+// @Description Retrieve a single advertisement by its ID
+// @Tags ads
+// @Produce json
+// @Param id path int64 true "Ad ID"
+// @Success 200 {object} entity.Ad
+// @Failure 400 {object} error "Invalid ad ID"
+// @Failure 404 {object} error "Ad not found"
+// @Failure 500 {object} error "Failed to get ad"
+// @Router /api/v1/ads/{id} [get]
 // getAdByID handles GET /ads/:id to retrieve a single advertisement by ID
 func (h *Handler) getAdByID(c echo.Context) error {
 	idParam := c.Param("id")
@@ -193,6 +244,19 @@ func (h *Handler) getAdByID(c echo.Context) error {
 	return c.JSON(http.StatusOK, ad)
 }
 
+// @Summary Delete Ad
+// @Description Delete an advertisement by its ID
+// @Tags ads
+// @Produce json
+// @Param Authorization header string true "Bearer <token>"
+// @Param id path int64 true "Ad ID"
+// @Success 204 "No content"
+// @Failure 400 {object} error "Invalid ad ID"
+// @Failure 401 {object} error "Unauthorized"
+// @Failure 403 {object} error "Forbidden"
+// @Failure 404 {object} error "Ad not found"
+// @Failure 500 {object} error "Failed to delete ad"
+// @Router /api/v1/ads/{id} [delete]
 // deleteAd handles DELETE /ads/:id to remove an advertisement by ID
 func (h *Handler) deleteAd(c echo.Context) error {
 	userID, ok := c.Get(middleware.CtxUserID).(int64)

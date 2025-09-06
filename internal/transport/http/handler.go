@@ -6,11 +6,23 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	_ "rest-api-marketplace/docs"
 
 	"rest-api-marketplace/internal/service"
 	v1 "rest-api-marketplace/internal/transport/http/v1"
 	"rest-api-marketplace/pkg/auth"
 )
+
+// @title REST API Marketplace
+// @version 1.0
+// @description This is a sample REST API for marketplace application.
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
 
 // Handler holds service dependencies and token manager for HTTP routes
 type Handler struct {

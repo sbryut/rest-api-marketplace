@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,10 +14,13 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 
+	_ "rest-api-marketplace/docs"
 	"rest-api-marketplace/internal/config"
 	"rest-api-marketplace/internal/repository"
 	"rest-api-marketplace/internal/service"
@@ -102,6 +106,9 @@ func Run() {
 	e := echo.New()
 	e.Validator = &CustomValidator{validator: v}
 	e.HTTPErrorHandler = customErrorHandler(log)
+
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+	//e.Logger.Fatal(e.Start(":1323"))
 
 	handler.Init(e.Group("/api"))
 

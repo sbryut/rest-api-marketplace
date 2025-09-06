@@ -37,6 +37,17 @@ type refreshInput struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
+// @Summary User Sign Up
+// @Description Register a new user
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body userInput true "User credentials for registration"
+// @Success 201 {object} entity.User
+// @Failure 400 {object} error "Invalid request body"
+// @Failure 409 {object} error "User with this login already exists"
+// @Failure 500 {object} error "Failed to create user"
+// @Router /api/v1/users/sign-up [post]
 // userSignUp handles user registration
 func (h *Handler) userSignUp(c echo.Context) error {
 	var input userInput
@@ -67,6 +78,17 @@ func (h *Handler) userSignUp(c echo.Context) error {
 	return c.JSON(http.StatusCreated, user)
 }
 
+// @Summary User Sign In
+// @Description User sign-in
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body userInput true "User credentials for login"
+// @Success 200 {object} tokenResponse
+// @Failure 400 {object} error "Invalid request body"
+// @Failure 401 {object} error "Invalid login or password"
+// @Failure 500 {object} error "Failed to sign in"
+// @Router /api/v1/users/sign-in [post]
 // userSignIn handles user login and returns JWT tokens
 func (h *Handler) userSignIn(c echo.Context) error {
 	var input userInput
@@ -98,6 +120,17 @@ func (h *Handler) userSignIn(c echo.Context) error {
 	})
 }
 
+// @Summary Refresh Tokens
+// @Description Refresh JWT access and refresh tokens
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body refreshInput true "Refresh token"
+// @Success 200 {object} tokenResponse
+// @Failure 400 {object} error "Invalid request body"
+// @Failure 401 {object} error "Invalid or expired refresh token"
+// @Failure 500 {object} error "Internal server error""
+// @Router /api/v1/users/auth/refresh [post]
 // userRefresh handles refreshing JWT tokens using a valid refresh token
 func (h *Handler) userRefresh(c echo.Context) error {
 	var input refreshInput
