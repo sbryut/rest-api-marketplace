@@ -27,15 +27,15 @@ func (h *Handler) initAdsRoutes(api *echo.Group) {
 }
 
 type createAdInput struct {
-	Title       string  `json:"title" validate:"required, min=1, max=100"`
-	Description string  `json:"description" validate:"required, max=1000"`
+	Title       string  `json:"title" validate:"required,min=1,max=100"`
+	Description string  `json:"description" validate:"required,max=1000"`
 	ImageURL    string  `json:"image_url" validate:"url"`
 	Price       float64 `json:"price" validate:"gte=0"`
 }
 
 type updateAdInput struct {
-	Title       *string  `json:"title,omitempty" validate:"required, min=1, max=100"`
-	Description *string  `json:"description,omitempty" validate:"required, max=1000"`
+	Title       *string  `json:"title,omitempty" validate:"required,min=1,max=100"`
+	Description *string  `json:"description,omitempty" validate:"required,max=1000"`
 	ImageURL    *string  `json:"image_url,omitempty" validate:"url"`
 	Price       *float64 `json:"price,omitempty" validate:"gte=0"`
 }
@@ -120,8 +120,21 @@ func (h *Handler) listAds(c echo.Context) error {
 		limit = 10
 	}
 
-	minPrice, _ := strconv.ParseFloat(c.QueryParam("max_price"), 64)
-	maxPrice, _ := strconv.ParseFloat(c.QueryParam("max_price"), 64)
+	var minPrice, maxPrice float64
+	if mp := c.QueryParam("min_price"); mp != "" {
+		val, err := strconv.ParseFloat(mp, 64)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "incorrect min price")
+		}
+		minPrice = val
+	}
+	if mp := c.QueryParam("max_price"); mp != "" {
+		val, err := strconv.ParseFloat(mp, 64)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "incorrect max price")
+		}
+		maxPrice = val
+	}
 
 	params := entity.GetAdsQuery{
 		Page:     page,
@@ -133,8 +146,14 @@ func (h *Handler) listAds(c echo.Context) error {
 	}
 
 	var currentUserId *int64
-	if userId, ok := c.Get(middleware.CtxUserID).(int64); ok {
-		currentUserId = &userId
+	if val := c.Get(middleware.CtxUserID); val != nil {
+		switch v := val.(type) {
+		case int64:
+			currentUserId = &v
+		case float64:
+			tmp := int64(v)
+			currentUserId = &tmp
+		}
 	}
 
 	ads, err := h.services.Ads.GetAll(c.Request().Context(), params, currentUserId)

@@ -128,7 +128,7 @@ func (r AdsRepo) GetAll(ctx context.Context, params entity.GetAdsQuery) ([]entit
 	baseQuery += fmt.Sprintf(" OFFSET $%d", argId)
 	args = append(args, offset)
 
-	rows, err := r.db.QueryContext(ctx, baseQuery, args)
+	rows, err := r.db.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%s: query execution: %w", op, err)
 	}

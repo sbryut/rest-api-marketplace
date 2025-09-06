@@ -1,18 +1,13 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-)
-
-const (
-	salt     = "nfvkmdfvkdjfvdjf"
-	signing  = "hnfveuv9r0vjeirn*^#cndk&ncdmkd)e"
-	TokenTTL = 12 * time.Hour
 )
 
 type TokenManager interface {
@@ -72,12 +67,8 @@ func (m *Manager) ParseJWTToken(accessToken string) (int64, error) {
 
 func (m *Manager) NewRefreshToken() (string, error) {
 	b := make([]byte, 32)
-	s := rand.NewSource(time.Now().Unix())
-	r := rand.New(s)
-
-	if _, err := r.Read(b); err != nil {
+	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-
-	return string(b), nil
+	return base64.URLEncoding.EncodeToString(b), nil
 }
