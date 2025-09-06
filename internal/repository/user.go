@@ -6,19 +6,22 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lib/pq"
-
 	"rest-api-marketplace/internal/entity"
+
+	"github.com/lib/pq"
 )
 
+// UsersRepo provides DB operations for users
 type UsersRepo struct {
 	db *sql.DB
 }
 
+// NewUsersRepo creates a new UsersRepo instance
 func NewUsersRepo(db *sql.DB) *UsersRepo {
 	return &UsersRepo{db: db}
 }
 
+// Create inserts a new user and returns its ID
 func (r *UsersRepo) Create(ctx context.Context, user entity.User) (int64, error) {
 	const op = "repository.UsersRepo.Create"
 
@@ -35,6 +38,7 @@ func (r *UsersRepo) Create(ctx context.Context, user entity.User) (int64, error)
 	return id, nil
 }
 
+// GetByLogin retrieves a user by login
 func (r *UsersRepo) GetByLogin(ctx context.Context, login string) (*entity.User, error) {
 	const op = "repository.UsersRepo.GetByLogin"
 
@@ -51,6 +55,7 @@ func (r *UsersRepo) GetByLogin(ctx context.Context, login string) (*entity.User,
 	return &user, nil
 }
 
+// GetByID retrieves a user by ID
 func (r *UsersRepo) GetByID(ctx context.Context, id int64) (*entity.User, error) {
 	const op = "repository.UsersRepo.GetByID"
 
@@ -67,6 +72,7 @@ func (r *UsersRepo) GetByID(ctx context.Context, id int64) (*entity.User, error)
 	return &user, nil
 }
 
+// GetByRefreshToken retrieves a user by refresh token
 func (r *UsersRepo) GetByRefreshToken(ctx context.Context, refreshToken string) (*entity.User, error) {
 	const op = "repository.UsersRepo.GetByRefreshToken"
 
@@ -85,6 +91,7 @@ func (r *UsersRepo) GetByRefreshToken(ctx context.Context, refreshToken string) 
 	return &user, nil
 }
 
+// SetSession updates a user's refresh token and expiration
 func (r *UsersRepo) SetSession(ctx context.Context, id int64, session entity.Session) error {
 	const op = "repository.UsersRepo.SetSession"
 

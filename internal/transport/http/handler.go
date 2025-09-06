@@ -1,21 +1,24 @@
+// Package http provides HTTP handlers and routes for the REST API
 package http
 
 import (
+	"net/http"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"net/http"
-	"rest-api-marketplace/internal/config"
-	"rest-api-marketplace/internal/service"
-	"rest-api-marketplace/internal/transport/http/v1"
 
+	"rest-api-marketplace/internal/service"
+	v1 "rest-api-marketplace/internal/transport/http/v1"
 	"rest-api-marketplace/pkg/auth"
 )
 
+// Handler holds service dependencies and token manager for HTTP routes
 type Handler struct {
 	services     *service.Services
 	tokenManager auth.TokenManager
 }
 
+// NewHandler creates a new Handler with given services and token manager
 func NewHandler(services *service.Services, tokenManager auth.TokenManager) *Handler {
 	return &Handler{
 		services:     services,
@@ -23,7 +26,8 @@ func NewHandler(services *service.Services, tokenManager auth.TokenManager) *Han
 	}
 }
 
-func (h *Handler) Init(cfg *config.Config) *echo.Echo {
+// Init sets up Echo instance, middlewares, and routes
+func (h *Handler) Init() *echo.Echo {
 	e := echo.New()
 
 	e.Use(
@@ -40,6 +44,7 @@ func (h *Handler) Init(cfg *config.Config) *echo.Echo {
 	return e
 }
 
+// initAPI initializes API versioned routes
 func (h *Handler) initAPI(e *echo.Echo) {
 	handlerV1 := v1.NewHandler(h.services, h.tokenManager)
 

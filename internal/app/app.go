@@ -1,15 +1,21 @@
+// Package app initializes and runs the REST API marketplace application
 package app
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang-migrate/migrate/v4"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v4"
+	"golang.org/x/crypto/bcrypt"
 
 	"rest-api-marketplace/internal/config"
 	"rest-api-marketplace/internal/repository"
@@ -18,13 +24,6 @@ import (
 	"rest-api-marketplace/pkg/auth"
 	postgres "rest-api-marketplace/pkg/client/postgresdb"
 	"rest-api-marketplace/pkg/hash"
-
-	"github.com/go-playground/validator/v10"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
-	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -33,10 +32,12 @@ const (
 	envProd  = "prod"
 )
 
+// CustomValidator integrates go-playground/validator with Echo
 type CustomValidator struct {
 	validator *validator.Validate
 }
 
+// Validate performs request struct validation
 func (cv *CustomValidator) Validate(i interface{}) error {
 	if err := cv.validator.Struct(i); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -44,6 +45,7 @@ func (cv *CustomValidator) Validate(i interface{}) error {
 	return nil
 }
 
+// Run starts the application: loads config, runs migrations, initializes dependencies, and launches the HTTP server
 func Run() {
 	if err := godotenv.Load(); err != nil {
 		slog.Error("error loading .env file", slog.Any("error", err))
@@ -74,6 +76,7 @@ func Run() {
 		log.Error("failed to connect database", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	defer postgres.CloseDatabase(db, log)
 
 	tokenManager, err := auth.NewManager(cfg.Auth.SigningKey)
 	if err != nil {
@@ -120,6 +123,7 @@ func Run() {
 	}
 }
 
+// setupLogger configures logger based on the environment
 func setupLogger(env string) *slog.Logger {
 	var log *slog.Logger
 
@@ -135,6 +139,7 @@ func setupLogger(env string) *slog.Logger {
 	return log
 }
 
+// customErrorHandler returns centralized Echo error handler
 func customErrorHandler(log *slog.Logger) echo.HTTPErrorHandler {
 	return func(err error, c echo.Context) {
 		code := http.StatusInternalServerError
@@ -152,13 +157,14 @@ func customErrorHandler(log *slog.Logger) echo.HTTPErrorHandler {
 		}
 
 		if !c.Response().Committed {
-			c.JSON(code, map[string]string{
+			_ = c.JSON(code, map[string]string{
 				"error": message,
 			})
 		}
 	}
 }
 
+// runMigrations applies database migrations on startup
 func runMigrations(cfg config.PostgresConfig, log *slog.Logger) {
 	migrationDNS := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		cfg.Username,

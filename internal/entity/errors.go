@@ -2,6 +2,7 @@ package entity
 
 import "errors"
 
+// Errors represents the most common errors in the service's responses to user requests
 var (
 	ErrUserExists   = errors.New("user with this login already exists")
 	ErrUserNotFound = errors.New("user not found")

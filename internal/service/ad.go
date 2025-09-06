@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+
 	"rest-api-marketplace/internal/entity"
 	"rest-api-marketplace/internal/repository"
 )
 
+// AdService provides operations to manage ads
 type AdService struct {
 	repo   repository.Ads
 	logger *slog.Logger
 }
 
+// NewAdService creates a new AdService instance
 func NewAdService(repo repository.Ads, logger *slog.Logger) *AdService {
 	return &AdService{
 		repo:   repo,
@@ -22,7 +25,8 @@ func NewAdService(repo repository.Ads, logger *slog.Logger) *AdService {
 	}
 }
 
-func (s AdService) Create(ctx context.Context, input CreateAdInput, userId int64) (*entity.Ad, error) {
+// Create validates input and creates a new ad
+func (s AdService) Create(ctx context.Context, input CreateAdInput, userID int64) (*entity.Ad, error) {
 	const op = "service.AdService.Create"
 
 	if err := validateInput(input.Title, input.Description, input.ImageURL, input.Price); err != nil {
@@ -30,26 +34,27 @@ func (s AdService) Create(ctx context.Context, input CreateAdInput, userId int64
 	}
 
 	ad := entity.Ad{
-		UserID:      userId,
+		UserID:      userID,
 		Title:       input.Title,
 		Description: input.Description,
 		ImageURL:    input.ImageURL,
 		Price:       input.Price,
 	}
 
-	adId, err := s.repo.Create(ctx, ad)
+	adID, err := s.repo.Create(ctx, ad)
 	if err != nil {
 		s.logger.Error("failed to create ad", slog.String("op", op), slog.String("error", err.Error()))
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return s.repo.GetById(ctx, adId)
+	return s.repo.GetByID(ctx, adID)
 }
 
-func (s AdService) Update(ctx context.Context, adId, userId int64, input UpdateAdInput) (*entity.Ad, error) {
+// Update modifies an existing ad with new data
+func (s AdService) Update(ctx context.Context, adID, userID int64, input UpdateAdInput) (*entity.Ad, error) {
 	const op = "service.AdService.Update"
 
-	originalAd, err := s.repo.GetById(ctx, adId)
+	originalAd, err := s.repo.GetByID(ctx, adID)
 	if err != nil {
 		if errors.Is(err, entity.ErrAdNotFound) {
 			return nil, fmt.Errorf("%s: %w", op, err)
@@ -58,7 +63,7 @@ func (s AdService) Update(ctx context.Context, adId, userId int64, input UpdateA
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	if originalAd.UserID != userId {
+	if originalAd.UserID != userID {
 		return nil, entity.ErrForbidden
 	}
 
@@ -70,8 +75,8 @@ func (s AdService) Update(ctx context.Context, adId, userId int64, input UpdateA
 	if input.Description != nil {
 		updatedAd.Description = *input.Description
 	}
-	if input.ImageURl != nil {
-		updatedAd.ImageURL = *input.ImageURl
+	if input.ImageURL != nil {
+		updatedAd.ImageURL = *input.ImageURL
 	}
 	if input.Price != nil {
 		updatedAd.Price = *input.Price
@@ -81,7 +86,7 @@ func (s AdService) Update(ctx context.Context, adId, userId int64, input UpdateA
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	if err := s.repo.Update(ctx, adId, updatedAd); err != nil {
+	if err := s.repo.Update(ctx, adID, updatedAd); err != nil {
 		if errors.Is(err, entity.ErrAdNotFound) {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
@@ -92,22 +97,49 @@ func (s AdService) Update(ctx context.Context, adId, userId int64, input UpdateA
 	return &updatedAd, nil
 }
 
+// GetByID retrieves an ad by its ID
 func (s AdService) GetByID(ctx context.Context, id int64) (*entity.Ad, error) {
 	const op = "service.AdService.GetByID"
 
-	ad, err := s.repo.GetById(ctx, id)
+	ad, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, entity.ErrAdNotFound) {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
-		s.logger.Error("failed to get user by id", slog.String("op", op), slog.String("error", err.Error()))
+		s.logger.Error("failed to get ad by id", slog.String("op", op), slog.String("error", err.Error()))
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return ad, nil
 }
 
-func (s AdService) GetAll(ctx context.Context, params entity.GetAdsQuery, currentUserId *int64) ([]entity.AdResponse, error) {
+// GetByIDWithAuthor retrieves an ad with author information and optional ownership info
+func (s AdService) GetByIDWithAuthor(ctx context.Context, id int64, currentUserID *int64) (*entity.AdResponse, error) {
+	const op = "service.AdService.GetByIDWithAuthor"
+
+	ad, err := s.repo.GetByIDWithAuthor(ctx, id)
+	if err != nil {
+		if errors.Is(err, entity.ErrAdNotFound) {
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
+		s.logger.Error("failed to get ad with author by id", slog.String("op", op), slog.String("error", err.Error()))
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	res := &entity.AdResponse{
+		AdWithAuthor: *ad,
+	}
+
+	if currentUserID != nil {
+		isOwner := ad.UserID == *currentUserID
+		res.IsOwner = &isOwner
+	}
+
+	return res, nil
+}
+
+// GetAll returns all ads with author info and optional ownership info
+func (s AdService) GetAll(ctx context.Context, params entity.GetAdsQuery, currentUserID *int64) ([]entity.AdResponse, error) {
 	const op = "service.AdService.GetAll"
 
 	adsWithAuthor, err := s.repo.GetAll(ctx, params)
@@ -123,34 +155,34 @@ func (s AdService) GetAll(ctx context.Context, params entity.GetAdsQuery, curren
 			AdWithAuthor: ad,
 		}
 
-		if currentUserId != nil {
-			isOwner := ad.UserID == *currentUserId
+		if currentUserID != nil {
+			isOwner := ad.UserID == *currentUserID
 			res.IsOwner = &isOwner
 		}
 
 		response[i] = res
-
 	}
 
 	return response, nil
 }
 
-func (s AdService) Delete(ctx context.Context, adId, userId int64) error {
+// Delete removes an ad if the user is authorized
+func (s AdService) Delete(ctx context.Context, adID, userID int64) error {
 	const op = "service.AdService.Delete"
 
-	ad, err := s.repo.GetById(ctx, adId)
+	ad, err := s.repo.GetByID(ctx, adID)
 	if err != nil {
 		if errors.Is(err, entity.ErrAdNotFound) {
 			return fmt.Errorf("%s: %w", op, err)
 		}
-		s.logger.Error("failed to get user by id for delete", slog.String("op", op), slog.String("error", err.Error()))
+		s.logger.Error("failed to get ad by id for delete", slog.String("op", op), slog.String("error", err.Error()))
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	if ad.UserID != userId {
+	if ad.UserID != userID {
 		return fmt.Errorf("%s: %w", op, entity.ErrForbidden)
 	}
-	if err := s.repo.Delete(ctx, adId); err != nil {
+	if err := s.repo.Delete(ctx, adID); err != nil {
 		if errors.Is(err, entity.ErrAdNotFound) {
 			return fmt.Errorf("%s: %w", op, err)
 		}
@@ -161,6 +193,7 @@ func (s AdService) Delete(ctx context.Context, adId, userId int64) error {
 	return nil
 }
 
+// validateInput checks if ad fields are correct
 func validateInput(title, description, imageURL string, price float64) error {
 	if len(title) < 1 || len(title) > 100 {
 		return fmt.Errorf("title length must be between 1 and 100: %w", entity.ErrInvalidInput)

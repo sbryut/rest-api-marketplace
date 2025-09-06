@@ -4,12 +4,13 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/labstack/echo/v4"
+
 	"rest-api-marketplace/internal/entity"
 	"rest-api-marketplace/internal/service"
-
-	"github.com/labstack/echo/v4"
 )
 
+// initUsersRoutes registers user-related routes under /users
 func (h *Handler) initUsersRoutes(api *echo.Group) {
 	users := api.Group("/users")
 	{
@@ -19,20 +20,24 @@ func (h *Handler) initUsersRoutes(api *echo.Group) {
 	}
 }
 
+// userInput represents the request payload for sign-up and sign-in
 type userInput struct {
 	Login    string `json:"login" validate:"required,min=3,max=64"`
 	Password string `json:"password" validate:"required,min=8,max=64"`
 }
 
+// tokenResponse represents JWT access and refresh tokens returned to the client
 type tokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
 
+// refreshInput represents the request payload for refreshing tokens
 type refreshInput struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
+// userSignUp handles user registration
 func (h *Handler) userSignUp(c echo.Context) error {
 	var input userInput
 	if err := c.Bind(&input); err != nil {
@@ -62,6 +67,7 @@ func (h *Handler) userSignUp(c echo.Context) error {
 	return c.JSON(http.StatusCreated, user)
 }
 
+// userSignIn handles user login and returns JWT tokens
 func (h *Handler) userSignIn(c echo.Context) error {
 	var input userInput
 	if err := c.Bind(&input); err != nil {
@@ -92,6 +98,7 @@ func (h *Handler) userSignIn(c echo.Context) error {
 	})
 }
 
+// userRefresh handles refreshing JWT tokens using a valid refresh token
 func (h *Handler) userRefresh(c echo.Context) error {
 	var input refreshInput
 	if err := c.Bind(&input); err != nil {

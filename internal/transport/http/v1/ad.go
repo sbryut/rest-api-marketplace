@@ -5,13 +5,14 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/labstack/echo/v4"
+
 	"rest-api-marketplace/internal/entity"
 	"rest-api-marketplace/internal/middleware"
 	"rest-api-marketplace/internal/service"
-
-	"github.com/labstack/echo/v4"
 )
 
+// initAdsRoutes registers all /ads endpoints with proper middlewares
 func (h *Handler) initAdsRoutes(api *echo.Group) {
 	ads := api.Group("/ads")
 	{
@@ -20,12 +21,12 @@ func (h *Handler) initAdsRoutes(api *echo.Group) {
 		ads.POST("", h.createAd, authMiddleware)
 		ads.PUT("/:id", h.updateAd, authMiddleware)
 		ads.GET("", h.listAds, optionalAuthMiddleware)
-		ads.GET("/:id", h.getAdById, optionalAuthMiddleware)
+		ads.GET("/:id", h.getAdByID, optionalAuthMiddleware)
 		ads.DELETE("/:id", h.deleteAd, authMiddleware)
-
 	}
 }
 
+// createAdInput defines input structure for creating a new ad
 type createAdInput struct {
 	Title       string  `json:"title" validate:"required,min=1,max=100"`
 	Description string  `json:"description" validate:"required,max=1000"`
@@ -33,6 +34,7 @@ type createAdInput struct {
 	Price       float64 `json:"price" validate:"gte=0"`
 }
 
+// updateAdInput defines input structure for updating an ad
 type updateAdInput struct {
 	Title       *string  `json:"title,omitempty" validate:"required,min=1,max=100"`
 	Description *string  `json:"description,omitempty" validate:"required,max=1000"`
@@ -40,8 +42,9 @@ type updateAdInput struct {
 	Price       *float64 `json:"price,omitempty" validate:"gte=0"`
 }
 
+// createAd handles POST /ads to create a new advertisement
 func (h *Handler) createAd(c echo.Context) error {
-	userId, ok := c.Get(middleware.CtxUserID).(int64)
+	userID, ok := c.Get(middleware.CtxUserID).(int64)
 	if !ok {
 		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user context")
 	}
@@ -60,7 +63,7 @@ func (h *Handler) createAd(c echo.Context) error {
 		Description: input.Description,
 		ImageURL:    input.ImageURL,
 		Price:       input.Price,
-	}, userId)
+	}, userID)
 
 	if err != nil {
 		if errors.Is(err, entity.ErrInvalidInput) {
@@ -72,27 +75,28 @@ func (h *Handler) createAd(c echo.Context) error {
 	return c.JSON(http.StatusCreated, ad)
 }
 
+// updateAd handles PUT /ads/:id to update an existing advertisement
 func (h *Handler) updateAd(c echo.Context) error {
-	userId, ok := c.Get(middleware.CtxUserID).(int64)
+	userID, ok := c.Get(middleware.CtxUserID).(int64)
 	if !ok {
 		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user context")
 	}
 
-	adId, err := h.parseIdFromPath(c, "id")
+	adID, err := h.parseIDFromPath(c, "id")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	var input createAdInput
+	var input updateAdInput
 	if err := c.Bind(&input); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	updatedAd, err := h.services.Ads.Update(c.Request().Context(), adId, userId, service.UpdateAdInput{
-		Title:       &input.Title,
-		Description: &input.Description,
-		ImageURl:    &input.ImageURL,
-		Price:       &input.Price,
+	updatedAd, err := h.services.Ads.Update(c.Request().Context(), adID, userID, service.UpdateAdInput{
+		Title:       input.Title,
+		Description: input.Description,
+		ImageURL:    input.ImageURL,
+		Price:       input.Price,
 	})
 	if err != nil {
 		switch {
@@ -109,6 +113,7 @@ func (h *Handler) updateAd(c echo.Context) error {
 	return c.JSON(http.StatusOK, updatedAd)
 }
 
+// listAds handles GET /ads to retrieve a paginated list of advertisements
 func (h *Handler) listAds(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	if page < 1 {
@@ -145,18 +150,18 @@ func (h *Handler) listAds(c echo.Context) error {
 		MaxPrice: maxPrice,
 	}
 
-	var currentUserId *int64
+	var currentUserID *int64
 	if val := c.Get(middleware.CtxUserID); val != nil {
 		switch v := val.(type) {
 		case int64:
-			currentUserId = &v
+			currentUserID = &v
 		case float64:
 			tmp := int64(v)
-			currentUserId = &tmp
+			currentUserID = &tmp
 		}
 	}
 
-	ads, err := h.services.Ads.GetAll(c.Request().Context(), params, currentUserId)
+	ads, err := h.services.Ads.GetAll(c.Request().Context(), params, currentUserID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get ads")
 	}
@@ -164,19 +169,20 @@ func (h *Handler) listAds(c echo.Context) error {
 	return c.JSON(http.StatusOK, ads)
 }
 
-func (h *Handler) getAdById(c echo.Context) error {
+// getAdByID handles GET /ads/:id to retrieve a single advertisement by ID
+func (h *Handler) getAdByID(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil || id <= 0 {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid ad id")
 	}
 
-	var currentUserId *int64
-	if userId, ok := c.Get(middleware.CtxUserID).(int64); ok {
-		currentUserId = &userId
+	var currentUserID *int64
+	if userID, ok := c.Get(middleware.CtxUserID).(int64); ok {
+		currentUserID = &userID
 	}
 
-	ad, err := h.services.Ads.GetByID(c.Request().Context(), id)
+	ad, err := h.services.Ads.GetByIDWithAuthor(c.Request().Context(), id, currentUserID)
 	if err != nil {
 		if errors.Is(err, entity.ErrAdNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "ad not found")
@@ -184,38 +190,22 @@ func (h *Handler) getAdById(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get ad")
 	}
 
-	res := entity.AdResponse{
-		AdWithAuthor: entity.AdWithAuthor{
-			ID:          id,
-			UserID:      ad.UserID,
-			Title:       ad.Title,
-			Description: ad.Description,
-			ImageURL:    ad.ImageURL,
-			Price:       ad.Price,
-			CreatedAt:   ad.CreatedAt,
-		},
-	}
-
-	if currentUserId != nil {
-		isOwner := ad.UserID == *currentUserId
-		res.IsOwner = &isOwner
-	}
-
-	return c.JSON(http.StatusOK, res)
+	return c.JSON(http.StatusOK, ad)
 }
 
+// deleteAd handles DELETE /ads/:id to remove an advertisement by ID
 func (h *Handler) deleteAd(c echo.Context) error {
-	userId, ok := c.Get(middleware.CtxUserID).(int64)
+	userID, ok := c.Get(middleware.CtxUserID).(int64)
 	if !ok {
 		return echo.NewHTTPError(http.StatusUnauthorized, "invalid user context")
 	}
 
-	adId, err := h.parseIdFromPath(c, "id")
+	adID, err := h.parseIDFromPath(c, "id")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	err = h.services.Ads.Delete(c.Request().Context(), adId, userId)
+	err = h.services.Ads.Delete(c.Request().Context(), adID, userID)
 	if err != nil {
 		switch {
 		case errors.Is(err, entity.ErrAdNotFound):

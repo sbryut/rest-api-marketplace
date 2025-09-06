@@ -1,18 +1,22 @@
+// Package middleware provides HTTP middlewares for authentication
 package middleware
 
 import (
-	"github.com/labstack/echo/v4"
-	_ "github.com/labstack/echo/v4"
 	"net/http"
-	"rest-api-marketplace/pkg/auth"
 	"strings"
+
+	"rest-api-marketplace/pkg/auth"
+
+	"github.com/labstack/echo/v4"
 )
 
+// AuthHeader and CtxUserID constants used for JWT authentication and context storage
 const (
 	AuthHeader = "Authorization"
 	CtxUserID  = "user_id"
 )
 
+// JWTAuth enforces JWT authentication and sets user ID in context
 func JWTAuth(tm auth.TokenManager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -35,6 +39,7 @@ func JWTAuth(tm auth.TokenManager) echo.MiddlewareFunc {
 	}
 }
 
+// JWTOptionalAuth optionally parses JWT token if provided
 func JWTOptionalAuth(tm auth.TokenManager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

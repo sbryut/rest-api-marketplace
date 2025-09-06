@@ -1,5 +1,6 @@
 package entity
 
+// GetAdsQuery represents query parameters for fetching ads
 type GetAdsQuery struct {
 	Page     int
 	Limit    int

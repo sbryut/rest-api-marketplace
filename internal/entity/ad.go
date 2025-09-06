@@ -1,9 +1,11 @@
+// Package entity defines domain entities
 package entity
 
 import (
 	"time"
 )
 
+// Ad represents an advertisement
 type Ad struct {
 	ID          int64     `json:"id"`
 	UserID      int64     `json:"user_id"`
@@ -14,6 +16,7 @@ type Ad struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// AdWithAuthor represents an ad along with author's login
 type AdWithAuthor struct {
 	ID          int64     `json:"id"`
 	UserID      int64     `json:"user_id"`
@@ -25,6 +28,7 @@ type AdWithAuthor struct {
 	AuthorLogin string    `json:"author_login"`
 }
 
+// AdResponse represents ad response for API with ownership info
 type AdResponse struct {
 	AdWithAuthor AdWithAuthor
 	IsOwner      *bool `json:"is_owner"`

@@ -1,19 +1,17 @@
+// Package postgres is a package for postgresDB, the service data source,
 package postgres
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"log/slog"
 
 	"rest-api-marketplace/internal/config"
-
-	_ "github.com/lib/pq"
 )
 
+// NewClient initializes and configures a connection to PostgresDB
 func NewClient(ctx context.Context, cfg config.PostgresConfig, log *slog.Logger) (*sql.DB, error) {
-
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host,
 		cfg.Port,
@@ -28,16 +26,19 @@ func NewClient(ctx context.Context, cfg config.PostgresConfig, log *slog.Logger)
 	}
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping database: %v", err)
+		if cerr := db.Close(); cerr != nil {
+			log.Error("failed to close database after ping error", slog.Any("error", cerr))
+		}
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	log.Info("Successfully connected to the database")
 	return db, nil
 }
 
-func CloseDatabase(db *sql.DB) {
+// CloseDatabase closes the connection to the PostgresDB
+func CloseDatabase(db *sql.DB, log *slog.Logger) {
 	if err := db.Close(); err != nil {
-		log.Printf("error closing database connection: %v", err)
+		log.Error("failed to close database connection", slog.Any("error", err))
 	}
 }

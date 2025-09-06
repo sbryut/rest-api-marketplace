@@ -1,11 +1,12 @@
+// Package config provides application configuration loader
 package config
 
 import (
-	_ "github.com/joho/godotenv/autoload"
 	"os"
 	"time"
 )
 
+// Config holds all application configurations
 type Config struct {
 	Env    string
 	Server ServerConfig
@@ -13,11 +14,13 @@ type Config struct {
 	Auth   AuthConfig
 }
 
+// ServerConfig holds HTTP server settings
 type ServerConfig struct {
 	Host string
 	Port string
 }
 
+// PostgresConfig holds PostgreSQL connection settings
 type PostgresConfig struct {
 	Host     string
 	Port     string
@@ -26,12 +29,14 @@ type PostgresConfig struct {
 	DBName   string
 }
 
+// AuthConfig holds JWT authentication settings
 type AuthConfig struct {
 	SigningKey      string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
 }
 
+// LoadConfig reads environment variables and returns Config
 func LoadConfig() (*Config, error) {
 	accessTTL, err := time.ParseDuration(os.Getenv("ACCESS_TOKEN_TTL"))
 	if err != nil {

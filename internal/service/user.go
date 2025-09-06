@@ -5,14 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"rest-api-marketplace/internal/repository"
-	"rest-api-marketplace/pkg/auth"
-	"rest-api-marketplace/pkg/hash"
 	"time"
 
 	"rest-api-marketplace/internal/entity"
+	"rest-api-marketplace/internal/repository"
+	"rest-api-marketplace/pkg/auth"
+	"rest-api-marketplace/pkg/hash"
 )
 
+// UsersService provides operations for managing users
 type UsersService struct {
 	repo            repository.Users
 	logger          *slog.Logger
@@ -22,6 +23,7 @@ type UsersService struct {
 	refreshTokenTTL time.Duration
 }
 
+// NewUsersService creates a new UsersService instance
 func NewUsersService(repo repository.Users, logger *slog.Logger, hasher hash.PasswordHasher, tokenManager auth.TokenManager, tokenTTL, refreshTokenTTL time.Duration) *UsersService {
 	return &UsersService{
 		repo:            repo,
@@ -33,6 +35,7 @@ func NewUsersService(repo repository.Users, logger *slog.Logger, hasher hash.Pas
 	}
 }
 
+// SignUp registers a new user
 func (s *UsersService) SignUp(ctx context.Context, input UserInput) (*entity.User, error) {
 	const op = "service.UsersService.SignUp"
 
@@ -72,6 +75,7 @@ func (s *UsersService) SignUp(ctx context.Context, input UserInput) (*entity.Use
 	return createdUser, nil
 }
 
+// SignIn authenticates a user and returns JWT tokens
 func (s *UsersService) SignIn(ctx context.Context, input UserInput) (Tokens, error) {
 	const op = "service.UsersService.SignIn"
 
@@ -91,6 +95,7 @@ func (s *UsersService) SignIn(ctx context.Context, input UserInput) (Tokens, err
 	return s.createSession(ctx, user.ID)
 }
 
+// RefreshTokens generates new access and refresh tokens for a valid refresh token
 func (s *UsersService) RefreshTokens(ctx context.Context, refreshToken string) (Tokens, error) {
 	const op = "service.UsersService.RefreshTokens"
 
@@ -109,6 +114,7 @@ func (s *UsersService) RefreshTokens(ctx context.Context, refreshToken string) (
 	return s.createSession(ctx, user.ID)
 }
 
+// createSession generates JWT access and refresh tokens and stores the session
 func (s *UsersService) createSession(ctx context.Context, id int64) (Tokens, error) {
 	const op = "service.UsersService.createSession"
 	var (
