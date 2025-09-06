@@ -20,7 +20,7 @@ func (h *Handler) initAdsRoutes(api *echo.Group) {
 		ads.POST("", h.createAd, authMiddleware)
 		ads.PUT("/:id", h.updateAd, authMiddleware)
 		ads.GET("", h.listAds, optionalAuthMiddleware)
-		//ads.GET("/id", h.getAdById, optionalAuthMiddleware)
+		ads.GET("/:id", h.getAdById, optionalAuthMiddleware)
 		ads.DELETE("/:id", h.deleteAd, authMiddleware)
 
 	}
@@ -162,6 +162,46 @@ func (h *Handler) listAds(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, ads)
+}
+
+func (h *Handler) getAdById(c echo.Context) error {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil || id <= 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid ad id")
+	}
+
+	var currentUserId *int64
+	if userId, ok := c.Get(middleware.CtxUserID).(int64); ok {
+		currentUserId = &userId
+	}
+
+	ad, err := h.services.Ads.GetByID(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, entity.ErrAdNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "ad not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get ad")
+	}
+
+	res := entity.AdResponse{
+		AdWithAuthor: entity.AdWithAuthor{
+			ID:          id,
+			UserID:      ad.UserID,
+			Title:       ad.Title,
+			Description: ad.Description,
+			ImageURL:    ad.ImageURL,
+			Price:       ad.Price,
+			CreatedAt:   ad.CreatedAt,
+		},
+	}
+
+	if currentUserId != nil {
+		isOwner := ad.UserID == *currentUserId
+		res.IsOwner = &isOwner
+	}
+
+	return c.JSON(http.StatusOK, res)
 }
 
 func (h *Handler) deleteAd(c echo.Context) error {
